@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Financial Model Converter</title>
+  <meta name="description" content="Convert Screener CSV exports into structured Excel financial models." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="navbar-brand">
+    <span class="brand-name">FinFormat Engine</span>
+  </div>
+  <div class="navbar-right">
+    <div class="status-indicator" id="statusIndicator">
+      <span class="status-dot"></span>
+      <span class="status-text">Ready</span>
+    </div>
+  </div>
+</nav>
+
+<!-- MAIN CONVERTER CONTAINER -->
+<main class="container">
+
+  <!-- CONVERTER BOX -->
+  <section class="card converter-card" id="converterBox">
+    <div class="step-header">
+      <div>
+        <h2 class="step-title">Select CSV Files</h2>
+        <p class="step-desc">Upload financial statement CSV files to generate the Excel model.</p>
+      </div>
+    </div>
+
+    <!-- Dropzone Area -->
+    <div class="dropzone" id="dropzone">
+      <div class="dropzone-title">Drag and drop CSV files here</div>
+      <div class="dropzone-sub">or click to browse from your computer</div>
+      <button class="btn btn-secondary select-files-btn" type="button" id="selectFilesBtn"
+              onclick="document.getElementById('fileInput').click(); event.stopPropagation();">
+        Select CSV Files
+      </button>
+      <input type="file" id="fileInput" multiple accept=".csv" style="display:none" />
+    </div>
+
+    <!-- Uploaded File Queue List -->
+    <div class="file-queue-section" id="fileQueueSection" style="display:none">
+      <div class="queue-header">
+        <span class="queue-title">Uploaded Files (<span id="queueCount">0</span>)</span>
+        <button class="btn btn-sm btn-ghost select-files-btn" type="button"
+                onclick="document.getElementById('fileInput').click(); event.stopPropagation();">
+          + Add Files
+        </button>
+      </div>
+      <div class="file-queue-list" id="fileQueueList">
+      </div>
+    </div>
+
+    <!-- Company Configuration & Conversion Bar -->
+    <div class="converter-config-bar">
+      
+      <div class="config-row-top">
+        <div class="company-input-group">
+          <label class="input-label" for="companyName">Company Name</label>
+          <input id="companyName" class="text-input" type="text" placeholder="Enter company name" />
+        </div>
+        
+        <div class="agent-toggle-group">
+          <label class="switch-label">
+            <input type="checkbox" id="aiModeToggle" onchange="toggleAiMode()">
+            <span class="slider round"></span>
+            Use AI Agent for Extraction
+          </label>
+        </div>
+      </div>
+
+      <div class="ai-config-panel" id="aiConfigPanel" style="display:none">
+        <label class="input-label" for="apiKey">Gemini API Key</label>
+        <input id="apiKey" class="text-input" type="password" placeholder="AI Studio API Key" />
+        <div class="api-help-text">Your API key is only used locally and never stored.</div>
+      </div>
+
+      <div class="convert-action-group">
+        <button class="btn btn-primary btn-large" id="convertBtn" onclick="runConversion()" disabled>
+          Generate Excel Model
+        </button>
+      </div>
+
+      <!-- AI Agent Log Window -->
+      <div class="agent-log-window" id="agentLogWindow" style="display:none">
+        <div class="log-header">AI Agent Processing Log</div>
+        <div class="log-content" id="agentLogContent"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULTS CARD -->
+  <section class="card results-card" id="resultsCard" style="display:none">
+    <div class="step-header">
+      <div>
+        <h2 class="step-title" id="resultsTitle">Financial Model Ready</h2>
+        <p class="step-desc">Workbook generated. Download file or view preview below.</p>
+      </div>
+    </div>
+
+    <!-- Download Row -->
+    <div class="download-row">
+      <button class="btn btn-gold btn-large" id="downloadBtn" onclick="downloadExcel()">
+        Download Excel (.xlsx)
+      </button>
+      <button class="btn btn-ghost" onclick="resetConverter()">Convert Another Batch</button>
+      <div class="download-info" id="downloadInfo"></div>
+    </div>
+
+    <!-- Preview Tabs -->
+    <div class="tabs" id="previewTabs">
+      <button class="tab active" data-tab="quarterly">Quarterly</button>
+      <button class="tab" data-tab="pl">P&amp;L Annual</button>
+      <button class="tab" data-tab="bs">Balance Sheet</button>
+      <button class="tab" data-tab="cf">Cash Flow</button>
+      <button class="tab" data-tab="ratios">Key Ratios</button>
+      <button class="tab" data-tab="charts">Charts</button>
+    </div>
+
+    <!-- Tab Panels -->
+    <div class="tab-panel active" id="tab-quarterly">
+      <div class="table-wrapper" id="table-quarterly"></div>
+    </div>
+    <div class="tab-panel" id="tab-pl">
+      <div class="table-wrapper" id="table-pl"></div>
+    </div>
+    <div class="tab-panel" id="tab-bs">
+      <div class="table-wrapper" id="table-bs"></div>
+    </div>
+    <div class="tab-panel" id="tab-cf">
+      <div class="table-wrapper" id="table-cf"></div>
+    </div>
+    <div class="tab-panel" id="tab-ratios">
+      <div class="table-wrapper" id="table-ratios"></div>
+    </div>
+    <div class="tab-panel" id="tab-charts">
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-title">Revenue Trend (Rs. Cr.)</div>
+          <canvas id="chartRevenue" height="200"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">EBITDA &amp; PAT (Rs. Cr.)</div>
+          <canvas id="chartProfits" height="200"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">EBITDA Margin (%)</div>
+          <canvas id="chartMargin" height="200"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">PAT Trend (Rs. Cr.)</div>
+          <canvas id="chartEPS" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay" style="display:none">
+    <div class="spinner-container">
+      <div class="spinner"></div>
+      <div class="spinner-text" id="spinnerText">Processing files...</div>
+    </div>
+  </div>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-text">FinFormat Engine · Financial Model Converter</div>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
